@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"sync"
 	"sync/atomic"
 )
 
@@ -44,23 +45,39 @@ func main() {
 func parseData(d []byte, p, n, s [][]byte) (int32, int32, int32) {
 	var word []byte
 	var pos, neg, stop int32
+	wg := sync.WaitGroup{}
 	for _, l := range d {
 		if l != byte(32) { // if not white space
 			word = append(word, l)
 		} else { // when it's whitespace
-			switch {
-			case byteinslice(p, word):
-				atomic.AddInt32(&pos, 1)
-			case byteinslice(n, word):
-				atomic.AddInt32(&neg, -1)
-			case byteinslice(s, word):
-				atomic.AddInt32(&stop, -1)
-			default:
-				//			fmt.Println(string(word))
-			}
+			wg.Add(1)
+			p_word := word
+			go func() {
+				if byteinslice(p, p_word) {
+					atomic.AddInt32(&pos, 1)
+				}
+				wg.Done()
+			}()
+			wg.Add(1)
+			n_word := word
+			go func() {
+				if byteinslice(n, n_word) {
+					atomic.AddInt32(&neg, 1)
+				}
+				wg.Done()
+			}()
+			wg.Add(1)
+			s_word := word
+			go func() {
+				if byteinslice(s, s_word) {
+					atomic.AddInt32(&stop, 1)
+				}
+				wg.Done()
+			}()
 			word = nil
 		}
 	}
+	wg.Wait()
 	return pos, neg, stop
 }
 func byteinslice(slice [][]byte, ele []byte) bool {
